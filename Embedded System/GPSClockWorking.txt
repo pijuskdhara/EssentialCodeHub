@@ -1,0 +1,233 @@
+/*
+ * File:   GPSClockMain.c
+ * Author: Hirak Das
+ *
+ * Created on June 4, 2021, 9:56 PM
+ */
+
+
+// CONFIG
+#pragma config FOSC = HS        // Oscillator Selection bits (HS oscillator)
+#pragma config WDTE = OFF       // Watchdog Timer Enable bit (WDT disabled)
+#pragma config PWRTE = OFF      // Power-up Timer Enable bit (PWRT disabled)
+#pragma config BOREN = OFF      // Brown-out Reset Enable bit (BOR disabled)
+#pragma config LVP = OFF        // Low-Voltage (Single-Supply) In-Circuit Serial Programming Enable bit (RB3 is digital I/O, HV on MCLR must be used for programming)
+#pragma config CPD = OFF        // Data EEPROM Memory Code Protection bit (Data EEPROM code protection off)
+#pragma config WRT = OFF        // Flash Program Memory Write Enable bits (Write protection off; all program memory may be written to by EECON control)
+#pragma config CP = ON          // Flash Program Memory Code Protection bit (All program memory code-protected)
+
+// #pragma config statements should precede project file includes.
+// Use project enums instead of #define for ON and OFF.
+
+#include <xc.h>
+
+#define _XTAl_FREQ 20000000
+#define sega RB7
+#define segb RB6
+#define segc RB5
+#define segd RB4
+#define sege RB3
+#define segg RB1
+#define segf RB2
+#define dig1 RD7
+#define dig2 RD6
+#define dig3 RD5
+#define dig4 RD4
+#define sw1  RA0
+#define sw2  RA1
+#define sw3  RA2
+#define sw4  RA3
+#define sw5  RA4
+#define sw6  RA5
+#define LD1  RE1
+#define LD2  RE2 
+#define LD3  RC0
+#define DP   RB0
+//void __interrupt() ser();
+void showTime(int H1, int H2, int M1, int M2);
+void display(int x);
+void seg(int a, int b, int c, int d, int e, int f, int g);
+void delay(int n);
+void extractGPSTime(char data);
+long i = 0;
+int tm[] = {0, 0, 0, 0, 0, 0}; //time hh,mm,ss
+int dpstate = 0;
+
+void main(void) {
+    TRISA = 0b00111111;
+    TRISB = 0x00;
+    TRISC = 0b11011100;
+    TRISD = 0x00;
+    TRISE = 0x00;
+    PORTA = PORTB = PORTC = PORTD = 0x00;
+    PORTE = 0xFF;
+    LD3 = 1;
+    ADCON1 = 0b0110;
+    ADCON0 = 0b0110;
+    SPEN = 1;
+    RX9 = 1;
+    CREN = 1;
+
+    TXSTA = 0b00100010;
+    RCSTA = 0b10010000;
+    SPBRG = 31;
+    TXIF = RCIF = 0;
+
+    INTCON |= 0b11000000;
+    PIE1 = 0b00100000;
+
+    while (1) {
+        showTime(tm[0], tm[1], tm[2], tm[3]);
+        if (i > 250) {
+            if (dpstate == 0) {
+                DP = 1;
+                dpstate = 1;
+            } else {
+                DP = 0;
+                dpstate = 0;
+            }
+            i = 0;
+        }
+
+        i++;
+
+    }
+}
+
+void delay(int n) {
+    int i = 0;
+    while (i < n) {
+        i++;
+    }
+}
+
+void __interrupt() ser() {
+    if (RCIF == 1) {
+        if (RCSTAbits.OERR) {
+            CREN = 0;
+            delay(200);
+            CREN = 1;
+        }
+        unsigned char data = RCREG;
+        //tm[0] = data-'0'/10;
+        //tm[1] = data-'0' %10;
+        //tm[2] = data -'0';
+        //tm[3] = data-'0'/10;
+        extractGPSTime(data);
+        RCIF = 0;
+
+    }
+
+    LD3 = 0;
+
+}
+
+int lds = 1;
+
+char gpflag[] = "$GPGGA,";
+int dindex = -1, gpflagSize = 7;
+
+void extractGPSTime(char data) {
+    //printf("%c ",data);
+    dindex++;
+    if (dindex < gpflagSize) {
+        if (data != gpflag[dindex]) {
+            //printf("%c ",data);
+            dindex = -1;
+            return;
+        }
+    } else {
+        int i = dindex - gpflagSize;
+        if (i > 5) {
+            dindex = -1;
+            return;
+        }
+
+        tm[i] = data - '0';
+        //printf("%c %d\n",data,tm[i]);	
+    }
+
+}
+
+void showTime(int H1, int H2, int M1, int M2) {
+    display(H1);
+    dig1 = 1;
+    //__delay_ms(1);
+    delay(100);
+    dig1 = 0;
+
+    display(H2);
+    dig2 = 1;
+    delay(100);
+    //__delay_ms(1);
+    dig2 = 0;
+
+    display(M1);
+    dig3 = 1;
+    delay(100);
+    //__delay_ms(1);
+    dig3 = 0;
+
+    display(M2);
+
+    dig4 = 1;
+    delay(100);
+    //__delay_ms(1);
+    dig4 = 0;
+}
+
+void display(int x) {
+
+    switch (x) {
+
+        case 0:
+            seg(0, 0, 0, 0, 0, 0, 1);
+            break;
+        case 1:
+            seg(1, 0, 0, 1, 1, 1, 1);
+            break;
+        case 2:
+            seg(0, 0, 1, 0, 0, 1, 0);
+            break;
+        case 3:
+            seg(0, 0, 0, 0, 1, 1, 0);
+            break;
+        case 4:
+            seg(1, 0, 0, 1, 1, 0, 0);
+            break;
+        case 5:
+            seg(0, 1, 0, 0, 1, 0, 0);
+            break;
+        case 6:
+            seg(0, 1, 0, 0, 0, 0, 0);
+            break;
+        case 7:
+            seg(0, 0, 0, 1, 1, 1, 1);
+            break;
+        case 8:
+            seg(0, 0, 0, 0, 0, 0, 0);
+            break;
+        case 9:
+            seg(0, 0, 0, 0, 1, 0, 0);
+            break;
+        case 11:
+            seg(1, 1, 1, 1, 1, 1, 1);
+            break;
+
+
+
+
+    }
+}
+
+void seg(int a, int b, int c, int d, int e, int f, int g) {
+
+    sega = a;
+    segb = b;
+    segc = c;
+    segd = d;
+    sege = e;
+    segf = f;
+    segg = g;
+}
+

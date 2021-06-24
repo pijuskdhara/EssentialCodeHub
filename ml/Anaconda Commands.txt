@@ -1,0 +1,2 @@
+cd c://ml//MLCourse
+jupyter notebook
