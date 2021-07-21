@@ -1,0 +1,7 @@
+
+Spring Ribbon is the Load balancer.
+
+Issue resolved by 
+	changing the version of Spring to 2.3.10.RELEASE
+	
+	
